@@ -247,11 +247,14 @@ body.busy main{opacity:.55;pointer-events:none}
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
     spark: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+    phone: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>',
+    bolt: '<path d="M13 3 5 13h6l-1 8 8-10h-6z"/>',
     wallet: '<path d="M4 7a2 2 0 0 1 2-2h11v3"/><rect x="4" y="7" width="16" height="12" rx="3"/><circle cx="16" cy="13" r="1.1"/>'
   };
   var ICONO_CAT = {
-    'Alimentación': 'fork', 'Supermercado': 'cart', 'Transporte': 'car', 'Salud': 'heart', 'Hogar y servicios': 'home',
-    'Educación': 'book', 'Ocio y suscripciones': 'play', 'Ropa y cuidado personal': 'shirt', 'Transferencias': 'swap', 'Otros': 'dots'
+    'Mercado y hogar': 'cart', 'Transporte': 'car', 'Comida fuera, ocio y antojos': 'fork', 'Para ti (ropa y compras)': 'shirt',
+    'Suscripciones': 'play', 'Celular': 'phone', 'Salud y farmacia': 'heart', 'Pagos fijos': 'wallet', 'Transferencias a personas': 'swap',
+    'Préstamos a otras personas': 'swap', 'Gimnasio (Bodytech)': 'bolt', 'Cobros de Uber por reclamar': 'sync', 'Otros': 'dots'
   };
 
   function ic(n, cls) { return '<svg viewBox="0 0 24 24" class="ic ' + (cls || '') + '" aria-hidden="true">' + (ICONOS[n] || '') + '</svg>'; }
@@ -399,7 +402,7 @@ body.busy main{opacity:.55;pointer-events:none}
       '<button class="icbtn" data-a="ajustes" aria-label="Ajustes">' + ic('gear') + '</button></div>';
     if (conTopes) {
       var neg = r.quedan < 0;
-      h += '<section class="hero"><div class="row between"><div class="lab"><i>' + ic('target') + '</i>Te quedan para vivir</div><span class="chip">' + esc(etiquetaPeriodo(d)) + '</span></div>' +
+      h += '<section class="hero"><div class="row between"><div class="lab"><i>' + ic('target') + '</i>Gastos en el mes</div><span class="chip">' + esc(etiquetaPeriodo(d)) + '</span></div>' +
         '<div class="big"' + (neg ? ' style="color:#F8C9B3"' : '') + '>' + money(r.quedan) + '</div>' +
         '<div class="foot" style="display:block"><span class="pill" style="display:inline-block;white-space:nowrap">Gastado ' + money(r.gastado) + ' de ' + money(r.totalTopes) + '</span>' +
         '<div style="margin-top:12px;font-size:12.5px;opacity:.8">' + (r.diasRestantes ? r.diasRestantes + (r.diasRestantes === 1 ? ' día' : ' días') + ' por delante' + (r.porDia ? ' · ≈ ' + money(r.porDia) + ' por día' : ' · sin margen') : 'Ciclo terminado') + '</div></div></section>';
@@ -444,8 +447,8 @@ body.busy main{opacity:.55;pointer-events:none}
         topes.map(filaTope).join('');
     }
     var neg = r.quedan < 0;
-    h += '<section class="sumcard' + (neg ? ' neg' : '') + '"><div class="lb">' + (neg ? 'Te pasaste de tus topes' : 'Te quedan para vivir hasta el ' + esc(d.ciclo.finLargo)) + '</div>' +
-      '<div class="bg">' + money(Math.abs(r.quedan)) + '</div><div class="sb">de ' + money(r.totalTopes) + ' en topes</div>' +
+    h += '<section class="sumcard' + (neg ? ' neg' : '') + '"><div class="lb">' + (neg ? 'Gastos en el mes · te pasaste de tus topes' : 'Gastos en el mes · hasta el ' + esc(d.ciclo.finLargo)) + '</div>' +
+      '<div class="bg">' + money(Math.abs(r.quedan)) + '</div><div class="sb">' + (neg ? 'por encima de ' : 'te quedan de ') + money(r.totalTopes) + ' en topes</div>' +
       '<div class="rw"><div><small>Gastado (validado)</small><b>' + money(r.gastado) + '</b></div>' +
       '<div><small>' + (r.diasRestantes ? 'Por día (' + r.diasRestantes + ' días)' : 'Ciclo terminado') + '</small><b>' + (r.porDia ? '≈ ' + money(r.porDia) : '—') + '</b></div></div>' +
       (r.sinValidar ? '<div class="nt">Hay ' + money(r.sinValidar) + ' sin validar que todavía no cuentan.</div>' : '') + '</section>';
@@ -554,20 +557,22 @@ body.busy main{opacity:.55;pointer-events:none}
 
   function vistaGastos(d) {
     var f = S.filtro;
-    var lista = d.recientes.filter(function (x) {
-      if (f === 'todos') return true;
-      if (f === 'validados') return x.valid === 'OK' || x.valid === 'Ajustar';
-      if (f === 'pendientes') return !x.valid;
-      return x.valid === 'Descartar';
-    });
-    var tabs = [['todos', 'Todos'], ['validados', 'Validados'], ['pendientes', 'Pendientes'], ['descartados', 'Descartados']].map(function (t) {
-      return '<button class="tab' + (f === t[0] ? ' on' : '') + '" data-a="filtro" data-f="' + t[0] + '">' + t[1] + '</button>';
+    var base = d.recientes.filter(function (x) { return x.valid !== 'Descartar'; });
+    var cuenta = {};
+    base.forEach(function (x) { var c = x.cat || 'Sin categoría'; cuenta[c] = (cuenta[c] || 0) + 1; });
+    var nombres = (d.todasCats || []).filter(function (c) { return cuenta[c]; });
+    if (cuenta['Sin categoría']) nombres.push('Sin categoría');
+    if (f !== 'todos' && !cuenta[f]) f = S.filtro = 'todos';
+    var lista = base.filter(function (x) { return f === 'todos' || (x.cat || 'Sin categoría') === f; });
+    var total = lista.reduce(function (a, x) { return a + x.monto; }, 0);
+    var tabs = [['todos', 'Todos (' + base.length + ')']].concat(nombres.map(function (c) { return [c, c + ' (' + cuenta[c] + ')']; })).map(function (t) {
+      return '<button class="tab' + (f === t[0] ? ' on' : '') + '" data-a="filtro" data-f="' + esc(t[0]) + '">' + esc(t[1]) + '</button>';
     }).join('');
-    var h = '<div class="head"><div><h1>Gastos</h1><p class="sub">Los 60 más recientes</p></div></div><div class="tabs">' + tabs + '</div>';
-    if (!lista.length) return h + '<div class="empty">No hay gastos en esta vista.</div>';
+    var h = '<div class="head"><div><h1>Gastos</h1><p class="sub">' + (f === 'todos' ? 'Los más recientes' : esc(f)) + ' · ' + lista.length + (lista.length === 1 ? ' compra' : ' compras') + ' · ' + money(total) + '</p></div></div><div class="tabs">' + tabs + '</div>';
+    if (!lista.length) return h + '<div class="empty">No hay gastos todavía.</div>';
     return h + lista.map(function (x) {
       if (S.abierto === x.id || S.ajustando === x.id) return tarjeta(x, true);
-      var tag = x.valid === 'Descartar' ? '<span class="tag no">Descartado</span>' : (x.valid ? '<span class="tag ok">Validado</span>' : '<span class="tag dup" style="background:var(--tint);color:var(--p0)">Pendiente</span>');
+      var tag = x.valid ? '<span class="tag ok">Validado</span>' : '<span class="tag dup" style="background:var(--tint);color:var(--p0)">Sin validar</span>';
       return '<article class="exp" data-a="abrir" data-id="' + esc(x.id) + '" style="cursor:pointer"><div class="top"><div class="nm">' + esc(x.comercio) + '</div><div class="am">' + money(x.monto) + '</div></div>' +
         '<div class="me">' + esc(fechaCorta(x.fecha)) + ' · ' + esc(x.cat || 'Sin categoría') + '</div><div class="chips">' + tag + '</div></article>';
     }).join('');
