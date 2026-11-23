@@ -192,6 +192,33 @@ nav .badge{top:-4px;right:calc(50% - 26px);border-color:var(--card);min-width:18
 body.busy main{opacity:.55;pointer-events:none}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:g .7s linear infinite}
 @keyframes g{to{transform:rotate(360deg)}}
+
+/* pagos fijos y deudas */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.mc{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:14px 16px}
+.mc .k{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);font-weight:500}
+.mc .k svg{width:16px;height:16px}
+.mc .v{font-size:24px;font-weight:700;letter-spacing:-.6px;margin-top:9px;line-height:1.05}
+.mc .s{font-size:12px;color:var(--muted);margin-top:4px}
+.mc .bar{margin-top:10px}
+.sumcard .pb{height:7px;border-radius:4px;background:rgba(255,255,255,.18);margin-top:14px;overflow:hidden}
+.sumcard .pb i{display:block;height:100%;border-radius:4px;background:#fff}
+.sumcard .spark{width:100%;height:auto;margin-top:16px}
+.sumcard .mt{margin-top:10px;font-size:12.5px;opacity:.75}
+.pg{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:14px 0;border-bottom:1px solid var(--line)}
+.pg:last-child{border-bottom:0}
+.pg .bx{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid #C9CCE0;display:grid;place-items:center;color:#fff}
+.pg .bx svg{width:16px;height:16px;stroke-width:3}
+.pg.hecho .bx{background:var(--ok);border-color:var(--ok)}
+.pg .tx{flex:1;min-width:0}
+.pg .tx b{display:block;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.pg .tx small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.pg .am{font-size:15px;font-weight:700;white-space:nowrap}
+.pg.hecho .tx b,.pg.hecho .am{color:var(--muted);text-decoration:line-through;text-decoration-color:#C9CCE0}
+.dbt{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:16px 18px;margin-top:12px}
+.dbt .nm{font-size:16px;font-weight:700}
+.dbt .gs{font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.45}
+.pgb{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px;display:grid;gap:10px}
 </style>
 </head>
 <body>
@@ -365,6 +392,12 @@ body.busy main{opacity:.55;pointer-events:none}
       '<div class="r"><div class="t">' + money(c.total) + '</div></div></div>';
   }
 
+  var MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  function mesLargo(m) { var x = /^(\d{4})-(\d{2})/.exec(m || ''); return x ? MESES_L[Number(x[2]) - 1] : ''; }
+  function mesSig(m) { var x = /^(\d{4})-(\d{2})/.exec(m || ''); if (!x) return ''; var n = Number(x[2]) + 1, a = Number(x[1]); if (n > 12) { n = 1; a++; } return a + '-' + ('0' + n).slice(-2); }
+  function fechaLarga(iso) { var x = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return x ? Number(x[3]) + ' de ' + MESES_L[Number(x[2]) - 1] : ''; }
+  function mcorto(n) { return n >= 1e6 ? (Math.round(n / 1e5) / 10).toString().replace('.', ',') + ' M' : money(n); }
+  function hoyIso() { var h = new Date(); return h.getFullYear() + '-' + ('0' + (h.getMonth() + 1)).slice(-2) + '-' + ('0' + h.getDate()).slice(-2); }
   function fechaDia(iso) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
     return m ? Number(m[3]) + ' ' + MESES[Number(m[2]) - 1] : '';
@@ -416,6 +449,7 @@ body.busy main{opacity:.55;pointer-events:none}
       '<button class="q" data-a="tab" data-t="validar"><b>' + ic('check') + (d.nPend ? '<span class="badge">' + d.pendientes.length + '</span>' : '') + '</b>Validar</button>' +
       '<button class="q" data-a="sync"><b>' + ic('sync') + '</b>Sincronizar</button>' +
       '<button class="q" data-a="tab" data-t="analisis"><b>' + ic('chart') + '</b>Análisis</button></div>';
+    h += tarjetasFijos(d);
     var rec = d.recientes.filter(function (f) { return f.valid !== 'Descartar'; }).slice(0, 6);
     h += '<div class="row between"><h2>Compras recientes</h2><button class="see" data-a="tab" data-t="gastos">Ver todo</button></div>';
     h += rec.length ? '<div class="card">' + rec.map(filaCompra).join('') + '</div>' :
@@ -437,6 +471,86 @@ body.busy main{opacity:.55;pointer-events:none}
       (d.totPend ? money(d.totPend) + ' que aún no cuentan en tus topes' : 'Gastos que aún no validas') + '</span></span><span class="n">' + d.pendientes.length + '</span></button>';
     return h;
   }
+
+
+  /* ---------- pagos fijos y deudas ---------- */
+  function tarjetasFijos(d) {
+    var p = d.pagos || {}, de = d.deudas || {};
+    var pagosHtml = p.total ?
+      '<div class="v">' + p.hechos + ' de ' + p.total + '</div><div class="s">' + (p.hechos === p.total ? 'Todo pagado' : 'Faltan ' + mcorto(p.falta)) + '</div>' +
+      '<div class="bar"><i style="width:' + Math.round(p.hechos / p.total * 100) + '%"></i></div>' :
+      '<div class="v" style="font-size:16px;margin-top:12px">Agrégalos</div><div class="s">Tus pagos del mes</div>';
+    var deudasHtml = (de.lista && de.lista.length) ?
+      '<div class="v">' + mcorto(de.total) + '</div><div class="s">' + (de.baja > 0 ? 'Bajaste ' + mcorto(de.baja) : 'Tu punto de partida') + '</div>' +
+      '<div class="bar"><i style="width:' + (de.inicial ? Math.min(100, Math.round(de.baja / de.inicial * 100)) : 0) + '%"></i></div>' :
+      '<div class="v" style="font-size:16px;margin-top:12px">Agrégalas</div><div class="s">Sigue lo que debes</div>';
+    return '<div class="duo">' +
+      '<button class="mc" data-a="tab" data-t="pagos"><div class="k">' + ic('wallet') + 'Pagos fijos</div>' + pagosHtml + '</button>' +
+      '<button class="mc" data-a="tab" data-t="deudas"><div class="k">' + ic('card') + 'Deudas</div>' + deudasHtml + '</button></div>';
+  }
+
+  function filaPago(x) {
+    return '<button class="pg' + (x.hecho ? ' hecho' : '') + '" data-a="pago" data-id="' + esc(x.id) + '"><span class="bx">' + (x.hecho ? ic('check') : '') + '</span>' +
+      '<span class="tx"><b>' + esc(x.concepto) + '</b>' + (x.hecho && x.nota ? '<small>' + esc(x.nota) + '</small>' : '') + '</span><span class="am">' + money(x.monto) + '</span></button>';
+  }
+
+  function vistaPagos(d) {
+    var p = d.pagos || { lista: [], total: 0 };
+    var h = '<div class="head"><div><h1>Pagos fijos</h1><p class="sub">' + (p.mes ? 'Pagos de ' + mesLargo(p.mes) : 'Lo que pagas cada mes') + '</p></div>' +
+      '<button class="icbtn" data-a="editarPagos" aria-label="Editar pagos">' + ic('edit') + '</button></div>' +
+      '<button class="see" data-a="tab" data-t="inicio" style="margin-top:10px">‹ Volver a Inicio</button>';
+    if (!p.total) return h + '<div class="empty">Aún no tienes pagos cargados.<br>Toca el lápiz para agregar el primero.</div>';
+    h += '<section class="sumcard"><div class="lb">Pagos de ' + esc(mesLargo(p.mes)) + '</div><div class="bg">' + p.hechos + ' de ' + p.total + '</div>' +
+      '<div class="sb">' + (p.hechos === p.total ? 'Todo pagado este mes.' : 'Faltan ' + money(p.falta)) + '</div>' +
+      '<div class="pb"><i style="width:' + Math.round(p.hechos / p.total * 100) + '%"></i></div></section>';
+    h += '<div class="card" style="margin-top:14px">' + p.lista.map(filaPago).join('') + '</div>';
+    h += '<p class="hint">Toca un pago para tacharlo. Si el banco te avisa por correo, se tacha solo. Si el pago es de una deuda, su saldo baja por la parte de capital.</p>';
+    h += '<button class="btn ghost" data-a="nuevoMes" style="width:100%;margin-top:14px">Empezar el mes de ' + esc(mesLargo(mesSig(p.mes))) + '</button>';
+    return h;
+  }
+
+  function spark(hist, total) {
+    var pts = (hist || []).map(function (x) { return { f: x.f, v: x.v }; }), hoy = hoyIso();
+    if (!pts.length || pts[pts.length - 1].f < hoy) pts.push({ f: hoy, v: total });
+    else pts[pts.length - 1].v = total;
+    if (pts.length < 2) return '';
+    function dia(f) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(f); return Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000; }
+    var d0 = dia(pts[0].f), d1 = dia(pts[pts.length - 1].f) || d0 + 1, span = Math.max(1, d1 - d0);
+    var max = Math.max.apply(null, pts.map(function (q) { return q.v; })), min = Math.min.apply(null, pts.map(function (q) { return q.v; }));
+    var X = function (q) { return 8 + (dia(q.f) - d0) / span * 304; }, Y = function (q) { return 10 + (1 - (q.v - min) / ((max - min) || 1)) * 56; };
+    var ruta = pts.map(function (q, i) { return (i ? 'L' : 'M') + X(q).toFixed(1) + ' ' + Y(q).toFixed(1); }).join(' ');
+    var u = pts[pts.length - 1];
+    return '<svg class="spark" viewBox="0 0 320 84" role="img" aria-label="Cómo baja tu deuda total"><path d="' + ruta + ' L' + X(u).toFixed(1) + ' 78 L8 78 Z" fill="rgba(255,255,255,.12)"/>' +
+      '<path d="' + ruta + '" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<circle cx="' + X(u).toFixed(1) + '" cy="' + Y(u).toFixed(1) + '" r="4.5" fill="#F2A07F"/></svg>';
+  }
+
+  function vistaDeudas(d) {
+    var D = d.deudas || { lista: [] };
+    var h = '<div class="head"><div><h1>Deudas</h1><p class="sub">Cada pago baja esta cifra</p></div>' +
+      '<button class="icbtn" data-a="nuevaDeuda" aria-label="Agregar deuda">' + ic('plus') + '</button></div>' +
+      '<button class="see" data-a="tab" data-t="inicio" style="margin-top:10px">‹ Volver a Inicio</button>';
+    if (!D.lista.length) return h + '<div class="empty">Aún no tienes deudas cargadas.<br>Toca el + para agregar la primera.</div>';
+    var meta = '';
+    if (D.fin) {
+      var hy = hoyIso(), meses = (Number(D.fin.slice(0, 4)) - Number(hy.slice(0, 4))) * 12 + (Number(D.fin.slice(5, 7)) - Number(hy.slice(5, 7)));
+      meta = 'Última cuota: ' + mesLargo(D.fin) + ' de ' + D.fin.slice(0, 4) + (meses > 0 ? ' (faltan ' + meses + (meses === 1 ? ' mes' : ' meses') + ')' : '');
+    }
+    h += '<section class="sumcard"><div class="lb">Debes en total, con tarjeta y todo</div><div class="bg">' + money(D.total) + '</div>' +
+      '<div class="sb">' + (D.baja > 0 ? 'Ya bajaste ' + money(D.baja) + (D.desde ? ' desde el ' + esc(fechaLarga(D.desde)) : '') : 'Este es tu punto de partida. Cada pago baja esta cifra.') + '</div>' +
+      '<div class="pb"><i style="width:' + (D.inicial ? Math.min(100, Math.round(D.baja / D.inicial * 100)) : 0) + '%"></i></div>' +
+      spark(D.historial, D.total) + (meta ? '<div class="mt">' + esc(meta) + '</div>' : '') + '</section>';
+    h += D.lista.map(function (x) {
+      var pagado = Math.max(0, x.inicial - x.saldo), pc = x.inicial ? pagado / x.inicial : 0;
+      return '<button class="dbt" data-a="editarDeuda" data-id="' + esc(x.id) + '"><div class="row between"><span class="nm">' + esc(x.nombre) + '</span><span class="nm">' + money(x.saldo) + '</span></div>' +
+        '<div class="bar"><i style="width:' + Math.min(100, Math.round(pc * 100)) + '%"></i></div>' +
+        '<div class="gs">Pagado ' + money(pagado) + (x.cuota ? ' · Cuota ' + money(x.cuota) : '') + (x.fin ? ' · Termina ' + esc(mesLargo(x.fin)) + ' ' + esc(x.fin.slice(0, 4)) : '') + '</div>' +
+        (x.nota ? '<div class="gs" style="margin-top:4px">' + esc(x.nota) + '</div>' : '') + '</button>';
+    }).join('');
+    h += '<p class="hint">Toca una deuda para corregir su saldo o su cuota.</p>';
+    return h;
+  }
+
 
   function vistaTopes(d) {
     var r = d.resumen || {}, topes = d.topes || [];
@@ -580,7 +694,7 @@ body.busy main{opacity:.55;pointer-events:none}
 
   function pintar() {
     var d = S.data; if (!d) return;
-    var v = S.tab === 'inicio' ? vistaInicio(d) : S.tab === 'topes' ? vistaTopes(d) : S.tab === 'analisis' ? vistaAnalisis(d) : S.tab === 'validar' ? vistaValidar(d) : vistaGastos(d);
+    var v = S.tab === 'inicio' ? vistaInicio(d) : S.tab === 'topes' ? vistaTopes(d) : S.tab === 'analisis' ? vistaAnalisis(d) : S.tab === 'pagos' ? vistaPagos(d) : S.tab === 'deudas' ? vistaDeudas(d) : S.tab === 'validar' ? vistaValidar(d) : vistaGastos(d);
     $('view').innerHTML = v;
     var items = [['inicio', 'Inicio', 'home'], ['topes', 'Topes', 'target'], null, ['validar', 'Validar', 'check'], ['gastos', 'Gastos', 'card']];
     $('nav').innerHTML = items.map(function (it) {
@@ -629,6 +743,69 @@ body.busy main{opacity:.55;pointer-events:none}
     accion('apiGuardarTopes', { dia: dia, topes: topes }, 'Topes guardados.');
   }
 
+  function opcionesDeuda(sel) {
+    return '<option value="">Ninguna (no baja ninguna deuda)</option>' + (((S.data || {}).deudas || {}).lista || []).map(function (x) {
+      return '<option value="' + esc(x.id) + '"' + (x.id === sel ? ' selected' : '') + '>' + esc(x.nombre) + '</option>';
+    }).join('');
+  }
+  function bloquePago(x) {
+    x = x || { id: '', concepto: '', monto: '', capital: '', deuda: '' };
+    return '<div class="pgb" data-pid="' + esc(x.id) + '">' +
+      '<label class="field">Pago<input class="inp pgC" maxlength="60" placeholder="Ej.: Internet" value="' + esc(x.concepto) + '" autocomplete="off"></label>' +
+      '<label class="field">Monto en pesos<input class="inp pgM" inputmode="numeric" placeholder="Ej.: 95000" value="' + (x.monto || '') + '" autocomplete="off"></label>' +
+      '<label class="field">Deuda a la que pertenece<select class="inp pgD">' + opcionesDeuda(x.deuda) + '</select></label>' +
+      '<label class="field">Parte que baja la deuda (capital, sin intereses)<input class="inp pgK" inputmode="numeric" placeholder="Solo si es cuota de una deuda" value="' + (x.capital || '') + '" autocomplete="off"></label>' +
+      (x.id ? '<label class="chk"><input type="checkbox" class="pgX">Quitar este pago de la lista</label>' : '') + '</div>';
+  }
+  function hojaPagos() {
+    var lista = ((S.data || {}).pagos || {}).lista || [];
+    abrirHoja('<h3>Editar pagos fijos</h3><div class="grid">' +
+      '<p class="sub" style="margin:0">Corrige montos o agrega pagos nuevos. Si un pago es la cuota de una deuda, elige la deuda y la parte que baja el saldo.</p>' +
+      '<div class="grid" id="pgLista">' + (lista.length ? lista.map(bloquePago).join('') : bloquePago(null)) + '</div>' +
+      '<button class="btn" data-a="pAgregar">' + ic('plus') + 'Agregar otro pago</button>' +
+      '<div class="btns" style="grid-template-columns:1fr 1fr"><button class="btn pri" data-a="pGuardar">Guardar</button><button class="btn" data-a="cerrar">Cancelar</button></div></div>');
+  }
+  function guardarPagos() {
+    var bl = document.querySelectorAll('.pgb'), pagos = [];
+    for (var i = 0; i < bl.length; i++) {
+      var b = bl[i], id = b.getAttribute('data-pid') || '', c = b.querySelector('.pgC').value.trim(), m = b.querySelector('.pgM').value.trim();
+      var x = b.querySelector('.pgX');
+      if (!id && !c && !m) continue;
+      pagos.push({ id: id, concepto: c, monto: m, capital: b.querySelector('.pgK').value.trim(), deuda: b.querySelector('.pgD').value, eliminar: !!(x && x.checked) });
+    }
+    if (!pagos.length) { cerrarHoja(); return; }
+    cerrarHoja();
+    accion('apiGuardarPagos', { pagos: pagos }, 'Pagos guardados.');
+  }
+
+  function hojaDeuda(id) {
+    var x = id ? (((S.data || {}).deudas || {}).lista || []).filter(function (q) { return q.id === id; })[0] : null;
+    S.deudaEd = x ? x.id : '';
+    x = x || { nombre: '', tipo: 'credito', saldo: '', cuota: '', fin: '', nota: '' };
+    abrirHoja('<h3>' + (S.deudaEd ? 'Editar deuda' : 'Agregar una deuda') + '</h3><div class="grid">' +
+      '<label class="field">Nombre<input class="inp" id="dNom" maxlength="40" placeholder="Ej.: Crédito del carro" value="' + esc(x.nombre) + '" autocomplete="off"></label>' +
+      '<label class="field">Tipo<select class="inp" id="dTipo"><option value="credito"' + (x.tipo === 'credito' ? ' selected' : '') + '>Crédito con cuotas</option><option value="tarjeta"' + (x.tipo === 'tarjeta' ? ' selected' : '') + '>Tarjeta de crédito</option></select></label>' +
+      '<label class="field">Cuánto debes hoy (saldo)<input class="inp" id="dSal" inputmode="numeric" value="' + (x.saldo === '' ? '' : x.saldo) + '" autocomplete="off"></label>' +
+      '<label class="field">Cuota mensual<input class="inp" id="dCuo" inputmode="numeric" placeholder="Opcional" value="' + (x.cuota || '') + '" autocomplete="off"></label>' +
+      '<label class="field">Mes de la última cuota<input class="inp" id="dFin" type="month" value="' + esc((x.fin || '').slice(0, 7)) + '"></label>' +
+      '<label class="field">Nota (opcional)<input class="inp" id="dNota" maxlength="200" value="' + esc(x.nota) + '" autocomplete="off"></label>' +
+      '<div class="btns" style="grid-template-columns:1fr 1fr"><button class="btn pri" data-a="dGuardar">Guardar</button><button class="btn" data-a="cerrar">Cancelar</button></div>' +
+      (S.deudaEd ? '<button class="btn ghost" data-a="dEliminar">Eliminar esta deuda</button>' : '') + '</div>');
+    setTimeout(function () { var i = $(S.deudaEd ? 'dSal' : 'dNom'); if (i) i.focus(); }, 60);
+  }
+  function guardarDeuda() {
+    var nom = $('dNom').value.trim(), sal = $('dSal').value.trim();
+    if (!nom) { aviso('Escribe el nombre de la deuda.', true); return; }
+    if (!/\d/.test(sal)) { aviso('Escribe cuánto debes hoy.', true); return; }
+    var p = { id: S.deudaEd, nombre: nom, tipo: $('dTipo').value, saldo: sal, cuota: $('dCuo').value.trim(), fin: $('dFin').value, nota: $('dNota').value.trim() };
+    cerrarHoja();
+    accion('apiGuardarDeuda', p, 'Deuda guardada.');
+  }
+  function hojaConfirmar(titulo, texto, ok, etiqueta) {
+    abrirHoja('<h3>' + esc(titulo) + '</h3><div class="grid"><p class="sub" style="margin:0">' + esc(texto) + '</p>' +
+      '<div class="btns" style="grid-template-columns:1fr 1fr"><button class="btn pri" data-a="' + ok + '">' + esc(etiqueta) + '</button><button class="btn" data-a="cerrar">Cancelar</button></div></div>');
+  }
+
   function hojaAjustes() {
     var d = S.data || {};
     abrirHoja('<h3>Ajustes</h3><div class="grid">' +
@@ -661,6 +838,23 @@ body.busy main{opacity:.55;pointer-events:none}
       case 'salir': cerrarSesion(''); break;
       case 'aGuardar': guardarAgregar(); break;
       case 'tope': { var n = el.getAttribute('data-n'); S.tope[n] = !S.tope[n]; pintar(); break; }
+      case 'pago': {
+        var lp = ((S.data || {}).pagos || {}).lista || [], px = lp.filter(function (q) { return q.id === id; })[0];
+        if (!px) break;
+        var dx = px.deuda ? (((S.data || {}).deudas || {}).lista || []).filter(function (q) { return q.id === px.deuda; })[0] : null;
+        accion('apiMarcarPago', { id: id, hecho: !px.hecho }, !px.hecho ? (dx && px.capital ? 'Pagado. ' + dx.nombre + ' bajó ' + money(px.capital) + '.' : 'Pagado.') : (dx && px.capital ? 'Desmarcado. ' + dx.nombre + ' volvió a subir ' + money(px.capital) + '.' : 'Desmarcado.'));
+        break;
+      }
+      case 'editarPagos': hojaPagos(); break;
+      case 'pAgregar': { var lg = $('pgLista'); if (lg) { lg.insertAdjacentHTML('beforeend', bloquePago(null)); var ult = lg.lastElementChild; if (ult) ult.scrollIntoView({ block: 'center' }); } break; }
+      case 'pGuardar': guardarPagos(); break;
+      case 'nuevoMes': hojaConfirmar('¿Empezar el mes nuevo?', 'Todos los pagos vuelven a "por pagar" y el mes pasa a ' + mesLargo(mesSig(((S.data || {}).pagos || {}).mes)) + '. Hazlo cuando recibas tu pago.', 'nuevoMesOk', 'Sí, empezar'); break;
+      case 'nuevoMesOk': cerrarHoja(); accion('apiNuevoMesPagos', undefined, 'Mes nuevo listo: todo por pagar.'); break;
+      case 'editarDeuda': hojaDeuda(id); break;
+      case 'nuevaDeuda': hojaDeuda(''); break;
+      case 'dGuardar': guardarDeuda(); break;
+      case 'dEliminar': hojaConfirmar('¿Eliminar esta deuda?', 'Se quita de tu seguimiento y de la suma del total. Los pagos que tenía enlazados quedan sin deuda. No se puede deshacer.', 'dEliminarOk', 'Sí, eliminar'); break;
+      case 'dEliminarOk': { var did = S.deudaEd; cerrarHoja(); accion('apiGuardarDeuda', { id: did, eliminar: true }, 'Deuda eliminada.'); break; }
       case 'editarTopes': hojaTopes(); break;
       case 'tGuardar': guardarTopes(); break;
       case 'sync': accion('apiSincronizar', undefined, function (r) { return r.mensaje || 'Sincronizado.'; }); break;
